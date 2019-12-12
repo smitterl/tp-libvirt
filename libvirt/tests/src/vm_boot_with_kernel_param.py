@@ -25,6 +25,7 @@ def run(test, params, env):
         kernel_param_remove = None
     cpu_check = params.get("hardware", "").upper()
     boot_log = params.get("boot_log", None)
+    check_cmdline_only = "yes" == params.get("check_cmdline_only", "no")
     status_error = params.get("status_error", "no") == "yes"
     vm_dict = {}
     vm_list = env.get_all_vms()
@@ -40,9 +41,19 @@ def run(test, params, env):
     try:
         for vm in vm_list:
             session = vm.wait_for_login()
-            utils_test.update_boot_option(vm, args_added=kernel_param,
-                                          args_removed=kernel_param_remove,
-                                          need_reboot=True)
+            if check_cmdline_only:
+                cmd = 'cat /proc/cmdline'
+                status, output = session.cmd_status_output(cmd)
+                if status:
+                    test.error("Couldn't get cmdline: %s" % output)
+                expected = params.get("expect_in_cmdline",
+                                      "expect_in_cmdline not defined in test configuration")
+                if expected not in output:
+                    test.error("Couldn't find '%s' in cmdline '%s'" % (expected, output))
+            else:
+                utils_test.update_boot_option(vm, args_added=kernel_param,
+                                              args_removed=kernel_param_remove,
+                                              need_reboot=True)
             if boot_log:
                 session = vm.wait_for_login()
                 # To ensure guest that doesn't support Radix MMU gets skipped
