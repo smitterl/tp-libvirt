@@ -14,6 +14,9 @@ from virttest.libvirt_xml.devices.controller import Controller
 
 from provider import libvirt_version
 
+LOGIN_TIMEOUT = 10
+CMD_TIMEOUT = 60
+
 
 def run(test, params, env):
     """
@@ -238,7 +241,7 @@ def run(test, params, env):
                             cmd = ("mount /dev/%s /mnt && dd if=/dev/zero of=/mnt/test"
                                    " bs=1M count=2000 2>&1 | grep 'No space left'"
                                    % disk_target)
-                            s, o = session.cmd_status_output(cmd)
+                            s, o = session.cmd_status_output(cmd, timeout=CMD_TIMEOUT)
                             logging.debug("error_policy in vm0 exit %s; output: %s", s, o)
                             if 0 != s:
                                 test.fail("Test error_policy %s: cann't see"
@@ -253,7 +256,7 @@ def run(test, params, env):
                                       "failed to mount disk")
                     if i == 1:
                         try:
-                            session0 = vms_list[0]['vm'].wait_for_login(timeout=10)
+                            session0 = vms_list[0]['vm'].wait_for_login(timeout=LOGIN_TIMEOUT)
                             cmd = ("fdisk -l /dev/%s && mkfs.ext3 -F /dev/%s "
                                    % (disk_target, disk_target))
                             s, o = session.cmd_status_output(cmd)
@@ -293,7 +296,7 @@ def run(test, params, env):
                         try:
                             test_str = "teststring"
                             # Try to write on vm0.
-                            session0 = vms_list[0]['vm'].wait_for_login(timeout=10)
+                            session0 = vms_list[0]['vm'].wait_for_login(timeout=LOGIN_TIMEOUT)
                             cmd = ("fdisk -l /dev/%s && mount /dev/%s /mnt && echo '%s' "
                                    "> /mnt/test && umount /mnt"
                                    % (disk_target, disk_target, test_str))
