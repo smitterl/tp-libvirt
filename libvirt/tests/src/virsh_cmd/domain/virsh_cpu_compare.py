@@ -92,6 +92,12 @@ def run(test, params, env):
     vmxml = vm_xml.VMXML.new_from_dumpxml(vm_name)
     vmxml_backup = vmxml.copy()
     host_cpu_xml = capability_xml.CapabilityXML()
+    if use_dumpxml_on_s390x:
+        host_cpu_xml['vendor'] = "IBM"
+        cpu = vm_xml.VMXML.new_from_dumpxml(vm_name, options="--update-cpu")['cpu']
+        host_cpu_xml['model'] = cpu['model']
+        for feature in cpu.get_feature_list():
+            host_cpu_xml.add_feature(feature.get('name'))
 
     try:
         # Add cpu element if it not present in VM XML
