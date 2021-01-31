@@ -72,6 +72,17 @@ Coding
 
  - libvirt_vm.check_exit_status
 
+- domain manipulation
+ 
+ - if an xml element is to be updated by the test, consider first removing it fully and defining it from scratch (this
+   helps avoid test failures due to slightly different guest xmls) - avocado-vt offers for example the method
+   vmxml.xmltreefile.remove_by_xpath
+
+- comments
+
+ - if a test is added or modified and there's a comment - usually for the 'run' function - then we should make sure
+   the comment still is valid
+ 
 - resource cleanup
 
  - vm_connection_session close(exception gracefully close)
@@ -108,6 +119,8 @@ Enhancement (best practice):
 - use :code:`with` to open files
 - either use global constants for timeouts or test :code:`params` to set values for timeouts (e.g. :code:`wait_for_loging(..., timeout=LOGIN_TIMEOUT)`);
   this way it is easier for others to tweak timeouts on slower systems
+- wait don't sleep: avoid using time.sleep(...); instead try waiting for a condition to hold (utils_misc.wait_for) - this speeds up testing and enables us to use larger timeout
+  values without necessarily increasing test duration
 - make sure this is run before sending patch::
 
     inspekt checkall --disable-style E501,E265,W601,E402,E722,E741 --no-license-check <test-script-name>.py
