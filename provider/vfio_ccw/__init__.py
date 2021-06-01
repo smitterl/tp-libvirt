@@ -1,9 +1,18 @@
-from uuid import uuid4
+"""
+This module provides helper functions used with the
+vfio_ccw passthrough driver on s390x.
+"""
 
-from virttest.utils_zchannels import ChannelPaths
-from virttest.libvirt_xml.vm_xml import VMXML
+import logging
 
-<<<<<<< HEAD
+from avocado.core.exceptions import TestError
+
+from virttest import utils_package
+from virttest import virsh
+from virttest.utils_zchannels import SubchannelPaths
+from virttest.utils_misc import cmd_status_output
+from virttest.libvirt_xml.devices.hostdev import Hostdev
+
 
 def device_is_listed(session, chpids):
     """
@@ -112,73 +121,3 @@ def get_device_info():
     schid = device[paths.HEADER["Subchan."]]
     chpids = device[paths.HEADER["CHPIDs"]]
     return schid, chpids
-=======
-from provider.vfio_ccw import device_is_listed, set_override, unset_override, \
-        start_device, stop_device, attach_hostdev, assure_preconditions, \
-        get_device_info
->>>>>>> dbcddb73... [libvirt_ccw_passthrough] move helper functions to internal package
-
-
-def run(test, params, env):
-    """
-    Test for CCW, esp. DASD disk passthrough on s390x.
-
-    The CCW disk/its subchannel for passthrough is expected to
-    be listed on the host but not enabled for use.
-    """
-
-    vm_name = params.get("main_vm")
-    vm = env.get_vm(vm_name)
-
-    vmxml = VMXML.new_from_inactive_dumpxml(vm_name)
-    backup_xml = vmxml.copy()
-
-    device_removal_case = "yes" == params.get("device_removal_case", "no")
-    schid = None
-    uuid = None
-    chpids = None
-
-    try:
-        assure_preconditions()
-
-        if vm.is_alive():
-            vm.destroy()
-
-        schid, chpids = get_device_info()
-        uuid = str(uuid4())
-
-        set_override(schid)
-        start_device(uuid, schid)
-        attach_hostdev(vm_name, uuid)
-
-        vm.start()
-        session = vm.wait_for_login()
-
-        if not device_is_listed(session, chpids):
-            test.fail("Device not visible inside guest")
-
-        if device_removal_case:
-            ChannelPaths.set_standby(chpids)
-            if device_is_listed(session, chpids):
-                test.fail("Device must not be visible inside guest")
-
-            vm.destroy()
-            ChannelPaths.set_online(chpids)
-
-            set_override(schid)
-            start_device(uuid, schid)
-
-            vm.start()
-            session = vm.wait_for_login()
-
-            if not device_is_listed(session, chpids):
-                test.fail("Device not visible after restoring setup.")
-
-    finally:
-        if chpids:
-            ChannelPaths.set_online(chpids)
-        if uuid:
-            stop_device(uuid)
-        if schid:
-            unset_override(schid)
-        backup_xml.sync()
