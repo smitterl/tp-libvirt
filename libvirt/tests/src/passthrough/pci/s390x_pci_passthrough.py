@@ -1,4 +1,5 @@
 import logging as log
+import re
 import time
 
 from threading import Thread
@@ -7,39 +8,52 @@ from avocado.core.exceptions import TestError, TestFail
 from avocado.utils import process
 from virttest.libvirt_xml.vm_xml import VMXML
 from virttest.libvirt_xml.nodedev_xml import NodedevXML
+from virttest.libvirt_xml.devices.hostdev import Hostdev
+from provider.vfio import pci
 
 
 logging = log.getLogger('avocado.' + __name__)
 smc_port = 37373
 
 
-def attach_device(pci_dev, vmxml):
+def get_hostdev(nodedev_xml):
+
+    hostdev_xml = Hostdev()
+    hostdev_xml.mode = "subsystem"
+    hostdev_xml.type = "pci"
+    hostdev_xml.driver = "vfio"
+    hostdev_xml.managed = "yes"
+    hostdev_xml.source = hostdev_xml.new_source(
+            **nodedev_xml.cap.get_address_dict()
+    )
+
+    return hostdev_xml
+
+
+def attach_device(driver_name, vm, plugmethod):
     """
-    Attaches the pci device if it's an ISM device.
 
-    :param pci_dev: The node device name of the ISM device.
-    :param vmxml: VMXML instance of the VM
     """
-    pci_xml = NodedevXML.new_from_dumpxml(pci_dev)
-    if "ism" != pci_xml.driver_name:
-        raise TestError("Device %s is not an ISM device: %s" % (pci_dev, pci_xml))
-    pci_address = pci_xml.cap.get_address_dict()
-    vmxml.add_hostdev(pci_address)
-    vmxml.sync()
+    if "coldplug" == plugmethod:
+        vm.destroy()
+
+    nodedev = pci.get_nodedev(driver_name)
+    hostdev = get_hostdev(nodedev)
+    virsh.attach_device(vm.name, hostdev.xml, "--current")
+
+    if "coldplug" == plugmethod:
+        vm.start()
 
 
-def check_device_is_available(vm):
+def check_device_is_available(vm, driver_name):
     """
-    Checks that the device is available inside the VM.
-
-    :param vm: the guest instance
     """
     session = vm.wait_for_login()
-    output = session.cmd_output("lspci")
+    output = session.cmd_output("ls /sys/bus/pci/drivers/{driver_name}/")
     session.close()
-    devices = output.split('\n')
-    if not len(devices) >= 1 or "ISM" not in devices[0]:
-        raise TestFail("Expected 1 ISM PCI device but got: %s" % output)
+    devices = [x for x in output.split('\n') if re.match(r"\d{4}:\d{2}:\d{2}\.\d", x)]
+    if not devices:
+        raise TestFail(f"No devices for {driver_name} found.")
 
 
 def check_guest_and_host_can_communicate(vm, guest_iface):
@@ -111,7 +125,7 @@ def run(test, params, env):
     # get the params from params
     vm_name = params.get("main_vm")
     vm = env.get_vm(vm_name)
-    pci_dev = params.get("pci_dev", "pci_0000_00_00_0")
+    driver_name = params.get("driver_name")
     check = params.get("check")
     guest_iface = params.get("guest_iface")
 
@@ -119,8 +133,7 @@ def run(test, params, env):
     backup_xml = vmxml.copy()
 
     try:
-        attach_device(pci_dev, vmxml)
-        vm.start()
+        attach_device(driver_name, vm, params.get("plugmethod"))
 
         if check == "available":
             check_device_is_available(vm)
